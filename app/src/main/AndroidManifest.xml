@@ -16,7 +16,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Entrance_mapper">
+        android:theme="@style/Theme.Corridor360">
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="YOUR_API_KEY_HERE" />
@@ -25,7 +25,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.Entrance_mapper">
+            android:theme="@style/Theme.Corridor360">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

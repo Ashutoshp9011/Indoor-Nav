@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.ashutosh.entrance_mapper"
+    namespace = "com.ashutosh.corridor360"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.ashutosh.entrance_mapper"
+        applicationId = "com.ashutosh.corridor360"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
