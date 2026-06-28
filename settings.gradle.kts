@@ -13,6 +13,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-
-rootProject.name = "EntranceMapper"
+rootProject.name = "Corridor360"
 include(":app")
