@@ -13,7 +13,7 @@ interface EdgeDao {
     fun getAllEdges(): Flow<List<EdgeEntity>>
 
     @Query("SELECT * FROM edges WHERE edgeId = :id")
-    suspend fun getEdgeById(id: Int): EdgeEntity?
+    suspend fun getEdgeById(id: String): EdgeEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEdge(edge: EdgeEntity)
@@ -25,7 +25,7 @@ interface EdgeDao {
     suspend fun updateEdge(edge: EdgeEntity)
 
     @Query("DELETE FROM edges WHERE edgeId = :id")
-    suspend fun deleteEdgeById(id: Int)
+    suspend fun deleteEdgeById(id: String)   // ✅ matches EdgeEntity.edgeId
 
     @Query("DELETE FROM edges")
     suspend fun deleteAllEdges()

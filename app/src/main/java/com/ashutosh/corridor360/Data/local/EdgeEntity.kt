@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "edges")
 data class EdgeEntity(
-    @PrimaryKey(autoGenerate = true) val edgeId: Int = 0,
+    @PrimaryKey val edgeId: String = java.util.UUID.randomUUID().toString(),
     val fromNodeId: String,
     val toNodeId: String,
     val distanceMeters: Float

@@ -1,83 +1,122 @@
 package com.ashutosh.corridor360.Data.sync
 
-import android.content.Context
+import com.ashutosh.corridor360.Data.local.EdgeDao
+import com.ashutosh.corridor360.Data.local.EdgeEntity
+import com.ashutosh.corridor360.Data.local.NodeDao
+import com.ashutosh.corridor360.Data.local.NodeEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import java.util.Base64
 
 class GitHubSyncManager(
-    private val context: Context,
-    private val repoOwner: String,
-    private val repoName: String,
-    private val filePath: String = "database/nodes.sqlite",
-    private val branch: String = "main",
-    private val token: String // pass from BuildConfig or encrypted storage, never hardcode
+    private val nodeDao: NodeDao,
+    private val edgeDao: EdgeDao,
+    private val token: String,
+    private val owner: String = "<your-github-username>",
+    private val repo: String = "Indoor-navigation-system",
+    private val path: String = "data/corridor_graph.json",
+    private val branch: String = "main"
 ) {
     private val client = OkHttpClient()
-    private var currentSha: String? = null // needed later for push (Step 9)
+    private val apiUrl = "https://api.github.com/repos/$owner/$repo/contents/$path"
 
-    private fun apiUrl() =
-        "https://api.github.com/repos/$repoOwner/$repoName/contents/$filePath?ref=$branch"
-
-    // Returns local File pointing to the downloaded DB
-    suspend fun pullDatabase(): File {
-        val request = Request.Builder()
-            .url(apiUrl())
-            .addHeader("Authorization", "Bearer $token")
-            .addHeader("Accept", "application/vnd.github+json")
+    suspend fun pull() = withContext(Dispatchers.IO) {
+        val req = Request.Builder()
+            .url("$apiUrl?ref=$branch")
+            .header("Authorization", "Bearer $token")
+            .header("Accept", "application/vnd.github+json")
             .build()
-
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("GitHub pull failed: ${response.code} ${response.message}")
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) return@withContext
+            val body = JSONObject(resp.body!!.string())
+            val decoded = String(Base64.getDecoder().decode(body.getString("content").replace("\n", "")))
+            mergeRemoteJson(decoded)
         }
-
-        val body = response.body?.string() ?: throw Exception("Empty response body")
-        val json = JSONObject(body)
-
-        currentSha = json.getString("sha") // store for Step 9 push
-        val base64Content = json.getString("content").replace("\n", "")
-        val decodedBytes = Base64.getDecoder().decode(base64Content)
-
-        val dbFile = File(context.filesDir, "nodes.sqlite")
-        dbFile.writeBytes(decodedBytes)
-
-        return dbFile
     }
 
-    fun getCurrentSha(): String? = currentSha
-
-    suspend fun pushDatabase(localFile: File) {
-        val content = Base64.getEncoder().encodeToString(localFile.readBytes())
-        val sha = currentSha ?: throw Exception("No SHA found. Pull before pushing.")
-
-        val jsonBody = JSONObject().apply {
-            put("message", "Sync database from Android app")
-            put("content", content)
-            put("sha", sha)
+    suspend fun push() = withContext(Dispatchers.IO) {
+        pull() // always merge remote first so you don't clobber teammates
+        val sha = getCurrentSha()
+        val json = buildLocalJson()
+        val encoded = Base64.getEncoder().encodeToString(json.toByteArray())
+        val payload = JSONObject().apply {
+            put("message", "Sync corridor graph (${android.os.Build.MODEL})")
+            put("content", encoded)
             put("branch", branch)
+            sha?.let { put("sha", it) }
         }
-
-        val request = Request.Builder()
-            .url(apiUrl())
-            .addHeader("Authorization", "Bearer $token")
-            .addHeader("Accept", "application/vnd.github+json")
-            .put(okhttp3.RequestBody.create(
-                okhttp3.MediaType.parse("application/json"),
-                jsonBody.toString()
-            ))
+        val req = Request.Builder()
+            .url(apiUrl)
+            .header("Authorization", "Bearer $token")
+            .header("Accept", "application/vnd.github+json")
+            .put(payload.toString().toRequestBody("application/json".toMediaType()))
             .build()
+        client.newCall(req).execute().close()
+    }
 
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("GitHub push failed: ${response.code} ${response.message}")
+    private fun getCurrentSha(): String? {
+        val req = Request.Builder().url("$apiUrl?ref=$branch")
+            .header("Authorization", "Bearer $token").build()
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) return null
+            return JSONObject(resp.body!!.string()).getString("sha")
         }
+    }
 
-        val responseBody = response.body?.string()
-        if (responseBody != null) {
-            currentSha = JSONObject(responseBody).getJSONObject("content").getString("sha")
+    private suspend fun buildLocalJson(): String {
+        val nodes = nodeDao.getAllNodes().first()
+        val edges = edgeDao.getAllEdges().first()
+        val nodeArr = JSONArray(nodes.map { n ->
+            JSONObject().apply {
+                put("nodeId", n.nodeId); put("name", n.name); put("floor", n.floor)
+                put("x", n.x); put("y", n.y); put("status", n.status)
+                put("panoramaPath", n.panoramaPath ?: JSONObject.NULL)
+            }
+        })
+        val edgeArr = JSONArray(edges.map { e ->
+            JSONObject().apply {
+                put("edgeId", e.edgeId); put("fromNodeId", e.fromNodeId)
+                put("toNodeId", e.toNodeId); put("distanceMeters", e.distanceMeters)
+            }
+        })
+        return JSONObject().apply { put("nodes", nodeArr); put("edges", edgeArr) }.toString()
+    }
+
+    private suspend fun mergeRemoteJson(json: String) {
+        val root = JSONObject(json)
+        val nodes = root.getJSONArray("nodes")
+        for (i in 0 until nodes.length()) {
+            val o = nodes.getJSONObject(i)
+            nodeDao.insertNode(
+                NodeEntity(
+                    nodeId = o.getString("nodeId"),
+                    name = o.getString("name"),
+                    floor = o.getInt("floor"),
+                    x = o.getDouble("x").toFloat(),
+                    y = o.getDouble("y").toFloat(),
+                    status = o.getString("status"),
+                    panoramaPath = if (o.isNull("panoramaPath")) null else o.getString("panoramaPath")
+                )
+            )
+        }
+        val edges = root.getJSONArray("edges")
+        for (i in 0 until edges.length()) {
+            val o = edges.getJSONObject(i)
+            edgeDao.insertEdge(
+                EdgeEntity( // requires the String-id change above
+                    edgeId = o.getString("edgeId"),
+                    fromNodeId = o.getString("fromNodeId"),
+                    toNodeId = o.getString("toNodeId"),
+                    distanceMeters = o.getDouble("distanceMeters").toFloat()
+                )
+            )
         }
     }
 }
