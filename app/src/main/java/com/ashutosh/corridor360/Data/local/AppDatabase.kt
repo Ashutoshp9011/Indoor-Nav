@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.ashutosh.corridor360.Data.local.dao.EdgeDao
+import com.ashutosh.corridor360.Data.local.dao.NodeDao
+import com.ashutosh.corridor360.entity.NodeEntity
 
 @Database(
     entities = [NodeEntity::class, EdgeEntity::class],

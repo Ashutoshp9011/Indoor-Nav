@@ -1,9 +1,9 @@
 package com.ashutosh.corridor360.Data.sync
 
-import com.ashutosh.corridor360.Data.local.EdgeDao
+import com.ashutosh.corridor360.Data.local.dao.EdgeDao
 import com.ashutosh.corridor360.Data.local.EdgeEntity
-import com.ashutosh.corridor360.Data.local.NodeDao
-import com.ashutosh.corridor360.Data.local.NodeEntity
+import com.ashutosh.corridor360.Data.local.dao.NodeDao
+import com.ashutosh.corridor360.entity.NodeEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext

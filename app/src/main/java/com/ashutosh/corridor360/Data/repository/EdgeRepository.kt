@@ -1,6 +1,6 @@
 package com.ashutosh.corridor360.Data.repository
 
-import com.ashutosh.corridor360.Data.local.EdgeDao
+import com.ashutosh.corridor360.Data.local.dao.EdgeDao
 import com.ashutosh.corridor360.Data.local.EdgeEntity
 import kotlinx.coroutines.flow.Flow
 

@@ -7,7 +7,8 @@ import com.google.ar.core.*
 import com.google.ar.core.exceptions.*
 import kotlin.math.sqrt
 
-class ARCoreDistanceManager(private val context: Context) {
+class
+ARCoreDistanceManager(private val context: Context) {
 
     private var session: Session? = null
     private var installRequested = false
@@ -28,6 +29,7 @@ class ARCoreDistanceManager(private val context: Context) {
                         return false
                     }
                     ArCoreApk.InstallStatus.INSTALLED -> { /* continue */ }
+                    else -> { /* handle unexpected null/status */ }
                 }
                 session = Session(context).apply {
                     val config = Config(this).apply {

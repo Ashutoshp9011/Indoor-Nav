@@ -1,7 +1,7 @@
 package com.ashutosh.corridor360.Data.repository
 
-import com.ashutosh.corridor360.Data.local.NodeDao
-import com.ashutosh.corridor360.Data.local.NodeEntity
+import com.ashutosh.corridor360.Data.local.dao.NodeDao
+import com.ashutosh.corridor360.entity.NodeEntity
 import kotlinx.coroutines.flow.Flow
 
 class NodeRepository(private val nodeDao: NodeDao) {

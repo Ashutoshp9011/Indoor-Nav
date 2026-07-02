@@ -3,7 +3,7 @@ package com.ashutosh.corridor360.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ashutosh.corridor360.Data.local.EdgeEntity
-import com.ashutosh.corridor360.Data.local.NodeEntity
+import com.ashutosh.corridor360.entity.NodeEntity
 import com.ashutosh.corridor360.Data.repository.EdgeRepository
 import com.ashutosh.corridor360.Data.repository.NodeRepository
 import kotlinx.coroutines.flow.SharingStarted
