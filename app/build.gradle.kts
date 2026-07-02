@@ -11,10 +11,22 @@ android {
 
     defaultConfig {
         applicationId = "com.ashutosh.corridor360"
-        minSdk = 26 // ARCore requires 24+; 26 is a safe practical floor
+        minSdk = 24 // ARCore requires 24+; 26 is a safe practical floor
         targetSdk = 34
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
     }
 
     buildFeatures {
@@ -28,6 +40,12 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
     }
 }
 
