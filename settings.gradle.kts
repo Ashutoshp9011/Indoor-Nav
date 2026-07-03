@@ -14,5 +14,9 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "EntranceMapper"
-include(":app")
+rootProject.name = "IndoorNav"
+
+include(":corridor360")
+include(":entrance-mapper")
+include(":sdk")
+project(":sdk").projectDir = file("sdk")
