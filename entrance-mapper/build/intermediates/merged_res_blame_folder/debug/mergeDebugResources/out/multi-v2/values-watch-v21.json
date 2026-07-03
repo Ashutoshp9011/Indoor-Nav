@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.ashutosh.entrance_mapper.app-mergeDebugResources-53:/values-watch-v21/values-watch-v21.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\ashut\\.gradle\\caches\\9.4.1\\transforms\\19e7b17e6bac8309d6d20f90841e91ab\\transformed\\appcompat-1.7.0\\res\\values-watch-v21\\values-watch-v21.xml",
+                    "from": {
+                        "startLines": "2,6,10",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "55,271,499",
+                        "endLines": "5,9,13",
+                        "endColumns": "12,12,12",
+                        "endOffsets": "266,494,724"
+                    }
+                }
+            ]
+        }
+    ]
+}
