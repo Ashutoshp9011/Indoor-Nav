@@ -16,7 +16,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "Corridor360"
 
-include(":app")
+include(":corridor360")
 
 // Local OpenCV Android SDK module — imported as a full Gradle module rather
 // than the Maven AAR, since the AAR is missing the stitching module you need
