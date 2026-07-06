@@ -1,4 +1,4 @@
-package com.ashutosh.corridor360.capture // TODO: match your package
+package com.ashutosh.corridor360.capture
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -6,27 +6,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-import kotlin.math.sqrt
 
-/**
- * Coverage thresholds — tune these against real capture tests. Corridor scanning
- * is translation-dominant (walking forward) rather than pure rotation, so both
- * matter, whichever triggers first counts as "enough movement for a new frame".
- */
-private const val YAW_THRESHOLD_DEGREES = 15f
-private const val TRANSLATION_THRESHOLD_METERS = 0.5f
 private const val MIN_FRAMES_TO_ENABLE_STITCH = 6
 
 data class CaptureUiState(
-    val isSessionReady: Boolean = false,
-    val distanceToSurfaceMeters: Float? = null,
+    val captureState: CaptureState = CaptureState.CAMERA_ACTIVE,
+    val lastDistanceMeters: Float? = null,
     val framesCaptured: Int = 0,
-    val coverageProgress: Float = 0f, // 0f..1f, drives the on-screen ring
-    val readyToCapture: Boolean = false, // enough movement since last frame
     val readyToStitch: Boolean = false,
     val errorMessage: String? = null
 )
+
+sealed class CaptureEvent {
+    object NavigateToStitching : CaptureEvent()
+}
 
 class CorridorCaptureViewModel(
     // TODO: inject your actual repository / DAO instead of this placeholder
@@ -36,52 +29,23 @@ class CorridorCaptureViewModel(
     private val _uiState = MutableStateFlow(CaptureUiState())
     val uiState: StateFlow<CaptureUiState> = _uiState.asStateFlow()
 
-    private var lastCapturedPose: CapturePose? = null
+    private val _events = MutableSharedFlow<CaptureEvent>()
+    val events = _events.asSharedFlow()
 
-    fun onSessionReady() {
-        _uiState.value = _uiState.value.copy(isSessionReady = true)
-    }
-
-    fun onSessionFailed(message: String) {
-        _uiState.value = _uiState.value.copy(isSessionReady = false, errorMessage = message)
-    }
-
-    /** Call this on every ARCore frame update (e.g. from a Choreographer callback). */
-    fun onPoseUpdated(pose: CapturePose?, distanceMeters: Float?) {
-        if (pose == null) return
-
-        val movedEnough = lastCapturedPose?.let { last ->
-            val yawDelta = abs(pose.yawDegrees - last.yawDegrees)
-            val translationDelta = sqrt(
-                (pose.x - last.x) * (pose.x - last.x) +
-                        (pose.y - last.y) * (pose.y - last.y) +
-                        (pose.z - last.z) * (pose.z - last.z)
-            )
-            yawDelta >= YAW_THRESHOLD_DEGREES || translationDelta >= TRANSLATION_THRESHOLD_METERS
-        } ?: true // first frame is always ready
-
-        val progress = lastCapturedPose?.let { last ->
-            val yawDelta = abs(pose.yawDegrees - last.yawDegrees) / YAW_THRESHOLD_DEGREES
-            val translationDelta = sqrt(
-                (pose.x - last.x) * (pose.x - last.x) +
-                        (pose.y - last.y) * (pose.y - last.y) +
-                        (pose.z - last.z) * (pose.z - last.z)
-            ) / TRANSLATION_THRESHOLD_METERS
-            maxOf(yawDelta, translationDelta).coerceIn(0f, 1f)
-        } ?: 1f
-
-        _uiState.value = _uiState.value.copy(
-            distanceToSurfaceMeters = distanceMeters,
-            readyToCapture = movedEnough,
-            coverageProgress = progress
-        )
+    /**
+     * Forwarded from CorridorCaptureHost's onStateChanged callback (via the Screen).
+     * Drives UI feedback during the stop-camera / arcore-read / restart-camera
+     * sequence — e.g. disable the Capture button, show a status label.
+     */
+    fun onCaptureStateChanged(state: CaptureState) {
+        _uiState.value = _uiState.value.copy(captureState = state, errorMessage = null)
     }
 
     /**
-     * Call when the user taps the capture button (or auto-capture fires once
-     * readyToCapture is true, if you want a hands-free flow).
+     * Forwarded from CorridorCaptureHost's onPoseCaptured callback. One call per
+     * completed sequential handoff (CameraX frame + single ARCore pose read).
      */
-    fun captureFrame(pose: CapturePose, imagePath: String) {
+    fun onPoseCaptured(pose: CapturePose, imagePath: String) {
         viewModelScope.launch {
             repository.saveFrame(
                 imagePath = imagePath,
@@ -90,20 +54,35 @@ class CorridorCaptureViewModel(
                 z = pose.z,
                 yawDegrees = pose.yawDegrees
             )
-            lastCapturedPose = pose
             val newCount = _uiState.value.framesCaptured + 1
             _uiState.value = _uiState.value.copy(
+                lastDistanceMeters = pose.distanceMeters,
                 framesCaptured = newCount,
-                readyToCapture = false,
-                coverageProgress = 0f,
                 readyToStitch = newCount >= MIN_FRAMES_TO_ENABLE_STITCH
             )
         }
     }
 
+    /** Forwarded from CorridorCaptureHost's onError callback. */
+    fun onCaptureError(message: String) {
+        _uiState.value = _uiState.value.copy(errorMessage = message)
+    }
+
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    /**
+     * Triggers the stitching process for the current segment.
+     * Only proceeds if the minimum number of frames has been met.
+     */
+    fun onStitchRequested() {
+        if (!_uiState.value.readyToStitch) return
+        // TODO: Implement navigation to stitching screen or trigger background processing
+    }
+
     fun resetSegment() {
-        lastCapturedPose = null
-        _uiState.value = CaptureUiState(isSessionReady = _uiState.value.isSessionReady)
+        _uiState.value = CaptureUiState(captureState = _uiState.value.captureState)
     }
 }
 

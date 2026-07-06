@@ -6,23 +6,26 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.ashutosh.corridor360.Data.local.dao.EdgeDao
 import com.ashutosh.corridor360.Data.local.dao.NodeDao
+import com.ashutosh.corridor360.Data.local.dao.FrameDao
+import com.ashutosh.corridor360.Data.local.entity.FrameEntity
 import com.ashutosh.corridor360.entity.NodeEntity
+// TODO: add the real import path for EdgeEntity — not shown in what you've sent me
 
 @Database(
-    entities = [NodeEntity::class, EdgeEntity::class],
-    version = 1,
+    entities = [NodeEntity::class, EdgeEntity::class, FrameEntity::class],
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun nodeDao(): NodeDao
     abstract fun edgeDao(): EdgeDao
+    abstract fun frameDao(): FrameDao
 
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        // Call this once at app start, with the path of the synced/downloaded sqlite file
         fun getInstance(context: Context, dbFilePath: String): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -37,7 +40,6 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        // Force-close and rebuild after a fresh GitHub sync replaces the file
         fun resetInstance() {
             INSTANCE?.close()
             INSTANCE = null

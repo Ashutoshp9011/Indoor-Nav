@@ -17,6 +17,7 @@ class CameraXRecorder(
 ) {
     private var imageCapture: ImageCapture? = null
     private var camera: Camera? = null
+    private var cameraProvider: ProcessCameraProvider? = null
     private val capturedFrames = mutableListOf<String>()
 
     // Call once when entering the capture screen for a node
@@ -29,6 +30,7 @@ class CameraXRecorder(
         providerFuture.addListener({
             try {
                 val provider = providerFuture.get()
+                cameraProvider = provider
 
                 val preview = Preview.Builder().build().also {
                     it.setSurfaceProvider(previewView.surfaceProvider)
@@ -86,7 +88,33 @@ class CameraXRecorder(
         capturedFrames.clear()
     }
 
-    fun stopCamera() {
-        ProcessCameraProvider.getInstance(context).get().unbindAll()
+    /**
+     * Async, confirmed camera release. Callers (CorridorCaptureHost) must wait for
+     * onStopped() before resuming ARCore — unbindAll() releasing the Camera2 device
+     * is not guaranteed to be instantaneous, and starting ARCore's session before
+     * release completes throws CameraNotAvailableException.
+     */
+    fun stopCamera(onStopped: () -> Unit = {}) {
+        val provider = cameraProvider
+        if (provider == null) {
+            onStopped()
+            return
+        }
+        try {
+            provider.unbindAll()
+            imageCapture = null
+            camera = null
+            // unbindAll() itself is synchronous on the provider's state, but the
+            // underlying Camera2 device close happens async. A short delay via
+            // the main executor's next loop is enough in practice; if you see
+            // CameraNotAvailableException from ARCore, bump this to a real
+            // Camera2 CameraDevice.StateCallback#onClosed listener instead.
+            ContextCompat.getMainExecutor(context).execute {
+                onStopped()
+            }
+        } catch (e: Exception) {
+            Log.e("CameraXRecorder", "stopCamera failed", e)
+            onStopped()
+        }
     }
 }

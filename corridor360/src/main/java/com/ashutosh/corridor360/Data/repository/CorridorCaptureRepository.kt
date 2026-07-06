@@ -1,28 +1,18 @@
-package com.ashutosh.corridor360.data.repository
+package com.ashutosh.corridor360.capture
 
-import com.ashutosh.corridor360.capture.CorridorCaptureRepository
 import com.ashutosh.corridor360.data.local.dao.FrameDao
 import com.ashutosh.corridor360.data.local.entity.FrameEntity
 
 /**
- * Room-backed implementation of the repository interface stubbed in
- * CorridorCaptureViewModel.kt. Construct this with a real FrameDao (from your
- * CorridorDatabase) via your manual ViewModel factory.
+ * Real Room-backed implementation, replacing the TODO interface stub
+ * in CorridorCaptureViewModel.kt. segmentId = nodeId, per your capture flow.
  */
-class CorridorCaptureRepositoryImpl(
+class RoomCorridorCaptureRepository(
     private val frameDao: FrameDao,
-    // Set by MappingScreen/nav args before capture starts — which corridor
-    // segment these frames belong to.
     private val segmentId: String
 ) : CorridorCaptureRepository {
 
-    override suspend fun saveFrame(
-        imagePath: String,
-        x: Float,
-        y: Float,
-        z: Float,
-        yawDegrees: Float
-    ) {
+    override suspend fun saveFrame(imagePath: String, x: Float, y: Float, z: Float, yawDegrees: Float) {
         frameDao.insert(
             FrameEntity(
                 imagePath = imagePath,
@@ -34,10 +24,4 @@ class CorridorCaptureRepositoryImpl(
             )
         )
     }
-
-    suspend fun framesForCurrentSegment(): List<FrameEntity> =
-        frameDao.getFramesForSegment(segmentId)
-
-    suspend fun clearCurrentSegment() =
-        frameDao.deleteFramesForSegment(segmentId)
 }

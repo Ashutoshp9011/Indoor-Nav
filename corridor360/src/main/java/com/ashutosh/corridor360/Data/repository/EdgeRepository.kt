@@ -4,6 +4,7 @@ import com.ashutosh.corridor360.Data.local.dao.EdgeDao
 import com.ashutosh.corridor360.Data.local.EdgeEntity
 import kotlinx.coroutines.flow.Flow
 
+
 class EdgeRepository(private val edgeDao: EdgeDao) {
 
     val allEdges: Flow<List<EdgeEntity>> = edgeDao.getAllEdges()

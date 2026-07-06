@@ -25,13 +25,16 @@ import com.ashutosh.corridor360.ui.CorridorViewModelFactory
 import com.ashutosh.corridor360.mapping.MappingScreen
 import com.ashutosh.corridor360.ui.theme.Corridor360Theme
 import com.ashutosh.corridor360.stitching.PanoramaStitcher
+import com.ashutosh.corridor360.capture.CorridorCaptureScreen
+import com.ashutosh.corridor360.capture.CorridorCaptureViewModel
+import com.ashutosh.corridor360.capture.CaptureViewModelFactory
+import com.ashutosh.corridor360.capture.RoomCorridorCaptureRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.opencv.android.OpenCVLoader
 import java.io.File
-
-// Simple in-app screen state — swap for NavHost later if it grows
+import com.ashutosh.corridor360.stitching.StitchResult
 sealed class Screen {
     object Mapping : Screen()
     data class Capture(val node: NodeEntity) : Screen()
@@ -58,11 +61,11 @@ class MainActivity : ComponentActivity() {
 
         ensureCameraPermission()
 
-        // Bundled DB path — getInstance signature expects a file path/name
         val dbFile = File(getExternalFilesDir(null), "corridor_graph.sqlite")
         val db = AppDatabase.getInstance(applicationContext, dbFile.absolutePath)
         val nodeRepo = NodeRepository(db.nodeDao())
         val edgeRepo = EdgeRepository(db.edgeDao())
+        val frameDao = db.frameDao()
 
         cameraXRecorder = CameraXRecorder(applicationContext, this)
 
@@ -85,14 +88,18 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                         is Screen.Capture -> {
-                            // In a real implementation, this would be a dedicated Composable
-                            // that displays the CameraX preview and a capture button.
-                            CaptureScreen(
-                                node = current.node,
-                                cameraXRecorder = cameraXRecorder,
-                                onDone = {
+                            val captureViewModel: CorridorCaptureViewModel = viewModel(
+                                factory = CaptureViewModelFactory(
+                                    RoomCorridorCaptureRepository(frameDao, current.node.nodeId),
+                                    current.node.nodeId
+                                )
+                            )
+                            CorridorCaptureScreen(
+                                viewModel = captureViewModel,
+                                nodeId = current.node.nodeId,
+                                onFinishSegment = {
                                     scope.launch {
-                                        finishCapture(current.node, viewModel) {
+                                        finishCapture(node = current.node, viewModel = viewModel) {
                                             screen = Screen.Mapping
                                         }
                                     }
@@ -102,8 +109,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        }
-    }
+        } // <-- was missing: closes setContent block before onCreate ends
+    } // <-- was missing: closes onCreate itself
 
     private fun ensureCameraPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
@@ -113,7 +120,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Runs stitching off main thread, then updates Room via the ViewModel
     private suspend fun finishCapture(
         node: NodeEntity,
         viewModel: CorridorViewModel,
@@ -130,13 +136,12 @@ class MainActivity : ComponentActivity() {
         val result = withContext(Dispatchers.Default) {
             PanoramaStitcher().stitch(frames, outputDir, node.nodeId)
         }
-
         when (result) {
-            is PanoramaStitcher.Result.Success -> {
+            is StitchResult.Success -> {
                 viewModel.completeMapping(node.nodeId, result.outputPath)
                 cameraXRecorder.clearFrames(node.nodeId)
             }
-            is PanoramaStitcher.Result.Failure -> {
+            is StitchResult.Failure -> {
                 Log.e("MainActivity", "Stitch failed: ${result.reason}")
             }
         }
@@ -147,13 +152,4 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         cameraXRecorder.stopCamera()
     }
-}
-@Composable
-fun CaptureScreen(
-    node: NodeEntity,
-    cameraXRecorder: CameraXRecorder,
-    onDone: () -> Unit
-) {
-    // Placeholder for the Camera capture UI
-    Text(text = "Capturing for node: ${node.nodeId}")
 }

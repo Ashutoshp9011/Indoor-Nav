@@ -14,8 +14,9 @@ import com.ashutosh.corridor360.data.repository.CorridorCaptureRepositoryImpl
  */
 class CaptureViewModelFactory(
     private val frameDao: FrameDao,
-    private val segmentId: String
-) : ViewModelProvider.Factory {
+    private val nodeId: String
+) : ViewModelProvider.Factory
+{
 
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(CorridorCaptureViewModel::class.java)) {

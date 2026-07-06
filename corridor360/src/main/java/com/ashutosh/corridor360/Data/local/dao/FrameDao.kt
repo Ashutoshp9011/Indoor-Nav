@@ -1,16 +1,15 @@
-package com.ashutosh.corridor360.data.local.dao
+package com.ashutosh.corridor360.Data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import com.ashutosh.corridor360.data.local.entity.FrameEntity
+import com.ashutosh.corridor360.Data.local.entity.FrameEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FrameDao {
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(frame: FrameEntity)
 
