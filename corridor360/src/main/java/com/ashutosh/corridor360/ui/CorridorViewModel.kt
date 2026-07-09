@@ -6,6 +6,8 @@ import com.ashutosh.corridor360.Data.local.EdgeEntity
 import com.ashutosh.corridor360.entity.NodeEntity
 import com.ashutosh.corridor360.Data.repository.EdgeRepository
 import com.ashutosh.corridor360.Data.repository.NodeRepository
+import com.ashutosh.corridor360.mapping.GitHubSyncManagerContract
+import com.ashutosh.corridor360.mapping.SyncController
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -14,6 +16,16 @@ class CorridorViewModel(
     private val nodeRepo: NodeRepository,
     private val edgeRepo: EdgeRepository
 ) : ViewModel() {
+
+    // Placeholder sync controller to satisfy MappingScreen.kt
+    val syncController = SyncController(
+        syncManager = object : GitHubSyncManagerContract {
+            override suspend fun syncNow() {
+                // TODO: Implement actual GitHub sync
+            }
+        },
+        scope = viewModelScope
+    )
 
     val allNodes = nodeRepo.allNodes
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

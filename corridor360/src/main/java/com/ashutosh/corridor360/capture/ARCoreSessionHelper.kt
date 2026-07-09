@@ -67,7 +67,7 @@ class ARCoreSessionHelper(private val context: Context) {
      * the vertical axis, which is what matters for "have I turned enough since
      * the last capture" coverage checks.
      */
-    fun latestPose(): CapturePose? {
+    fun latestPose(screenWidth: Int, screenHeight: Int): CapturePose? {
         val frame: Frame = session?.update() ?: return null
         val camera = frame.camera
         if (camera.trackingState != TrackingState.TRACKING) return null
@@ -80,11 +80,15 @@ class ARCoreSessionHelper(private val context: Context) {
             )
         ).toFloat()
 
+        val hits = frame.hitTest(screenWidth / 2f, screenHeight / 2f)
+        val distance = hits.minByOrNull { it.distance }?.distance
+
         return CapturePose(
             x = pose.tx(),
             y = pose.ty(),
             z = pose.tz(),
-            yawDegrees = yawDegrees
+            yawDegrees = yawDegrees,
+            distanceMeters = distance
         )
     }
 
@@ -103,9 +107,3 @@ class ARCoreSessionHelper(private val context: Context) {
     }
 }
 
-data class CapturePose(
-    val x: Float,
-    val y: Float,
-    val z: Float,
-    val yawDegrees: Float
-)

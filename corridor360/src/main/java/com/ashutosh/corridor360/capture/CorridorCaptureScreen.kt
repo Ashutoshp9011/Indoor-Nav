@@ -39,7 +39,7 @@ fun CorridorCaptureScreen(
             nodeId = nodeId,
             onStateChanged = { state -> viewModel.onCaptureStateChanged(state) },
             onPoseCaptured = { pose, imagePath -> viewModel.onPoseCaptured(pose, imagePath) },
-            onError = { message -> viewModel.onCaptureError(message) }
+            onError = { message -> viewModel.onError(message) }
         )
     }
     DisposableEffect(host) {

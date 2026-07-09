@@ -9,7 +9,8 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/corridor360" />
+            <option value="$PROJECT_DIR$/entrance-mapper" />
             <option value="$PROJECT_DIR$/sdk" />
           </set>
         </option>

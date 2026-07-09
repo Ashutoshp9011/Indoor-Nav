@@ -2,8 +2,11 @@ package com.ashutosh.corridor360.capture
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ashutosh.corridor360.Data.repository.CorridorCaptureRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
@@ -56,7 +59,6 @@ class CorridorCaptureViewModel(
             )
             val newCount = _uiState.value.framesCaptured + 1
             _uiState.value = _uiState.value.copy(
-                lastDistanceMeters = pose.distanceMeters,
                 framesCaptured = newCount,
                 readyToStitch = newCount >= MIN_FRAMES_TO_ENABLE_STITCH
             )
@@ -64,29 +66,13 @@ class CorridorCaptureViewModel(
     }
 
     /** Forwarded from CorridorCaptureHost's onError callback. */
-    fun onCaptureError(message: String) {
+    fun onError(message: String) {
         _uiState.value = _uiState.value.copy(errorMessage = message)
     }
 
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(errorMessage = null)
-    }
-
-    /**
-     * Triggers the stitching process for the current segment.
-     * Only proceeds if the minimum number of frames has been met.
-     */
     fun onStitchRequested() {
-        if (!_uiState.value.readyToStitch) return
-        // TODO: Implement navigation to stitching screen or trigger background processing
+        viewModelScope.launch {
+            _events.emit(CaptureEvent.NavigateToStitching)
+        }
     }
-
-    fun resetSegment() {
-        _uiState.value = CaptureUiState(captureState = _uiState.value.captureState)
-    }
-}
-
-/** TODO: replace with your real Room-backed repository. */
-interface CorridorCaptureRepository {
-    suspend fun saveFrame(imagePath: String, x: Float, y: Float, z: Float, yawDegrees: Float)
 }

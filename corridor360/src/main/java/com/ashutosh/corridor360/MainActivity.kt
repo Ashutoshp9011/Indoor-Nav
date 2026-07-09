@@ -28,7 +28,6 @@ import com.ashutosh.corridor360.stitching.PanoramaStitcher
 import com.ashutosh.corridor360.capture.CorridorCaptureScreen
 import com.ashutosh.corridor360.capture.CorridorCaptureViewModel
 import com.ashutosh.corridor360.capture.CaptureViewModelFactory
-import com.ashutosh.corridor360.capture.RoomCorridorCaptureRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,7 +89,7 @@ class MainActivity : ComponentActivity() {
                         is Screen.Capture -> {
                             val captureViewModel: CorridorCaptureViewModel = viewModel(
                                 factory = CaptureViewModelFactory(
-                                    RoomCorridorCaptureRepository(frameDao, current.node.nodeId),
+                                    frameDao,
                                     current.node.nodeId
                                 )
                             )

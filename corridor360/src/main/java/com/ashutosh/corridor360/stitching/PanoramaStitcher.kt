@@ -41,7 +41,7 @@ class PanoramaStitcher {
         val stitcher = Stitcher.create(Stitcher.SCANS)
         val result = Mat()
 
-        val status = stitcher.stitch(mats, result)
+        val status = stitcher.stitch(mats.toMutableList(), result)
 
         mats.forEach { it.release() }
 

@@ -7,8 +7,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
-import com.ashutosh.corridor360.data.local.dao.NodeDao
-import com.ashutosh.corridor360.data.local.entity.NodeEntity
+import com.ashutosh.corridor360.Data.local.dao.NodeDao
+import com.ashutosh.corridor360.entity.NodeEntity
 import kotlinx.coroutines.flow.first
 import java.io.File
 import java.io.FileOutputStream
@@ -36,7 +36,7 @@ class SeedDatabaseLoader(
 
         try {
             val nodes = readNodesFromAsset()
-            nodes.forEach { nodeDao.insert(it) }
+            nodeDao.insertNodes(nodes)
         } catch (e: Exception) {
             return
         }
@@ -74,21 +74,22 @@ class SeedDatabaseLoader(
 
         val nodes = mutableListOf<NodeEntity>()
         // TODO: adjust table/column names to match your actual nodes.sqlite schema
-        db.rawQuery("SELECT id, x, y, z, label FROM nodes", null).use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow("id")
+        db.rawQuery("SELECT nodeId, name, floor, x, y FROM nodes", null).use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow("nodeId")
+            val nameCol = cursor.getColumnIndexOrThrow("name")
+            val floorCol = cursor.getColumnIndexOrThrow("floor")
             val xCol = cursor.getColumnIndexOrThrow("x")
             val yCol = cursor.getColumnIndexOrThrow("y")
-            val zCol = cursor.getColumnIndexOrThrow("z")
-            val labelCol = cursor.getColumnIndexOrThrow("label")
 
             while (cursor.moveToNext()) {
                 nodes.add(
                     NodeEntity(
-                        id = cursor.getString(idCol),
+                        nodeId = cursor.getString(idCol),
+                        name = cursor.getString(nameCol),
+                        floor = cursor.getInt(floorCol),
                         x = cursor.getFloat(xCol),
                         y = cursor.getFloat(yCol),
-                        z = cursor.getFloat(zCol),
-                        label = cursor.getString(labelCol)
+                        status = "unmapped"
                     )
                 )
             }

@@ -18,7 +18,6 @@ rootProject.name = "Corridor360"
 
 include(":corridor360")
 include(":entrance-mapper")
-
-// Local OpenCV Android SDK module
 include(":opencv")
-project(":opencv").projectDir = File(rootDir, "sdk")
+project(":opencv").projectDir = File("sdk")
+
