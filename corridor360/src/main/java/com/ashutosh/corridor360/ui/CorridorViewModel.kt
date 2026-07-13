@@ -44,6 +44,20 @@ class CorridorViewModel(
         edgeRepo.addEdge(edge)
     }
 
+    fun addNode(name: String, floor: Int, x: Float, y: Float) {
+        viewModelScope.launch {
+            val node = NodeEntity(
+                nodeId = java.util.UUID.randomUUID().toString(),
+                name = name,
+                floor = floor,
+                x = x,
+                y = y,
+                status = "unmapped"
+            )
+            nodeRepo.addNode(node)   // ✅ matches actual repo signature
+        }
+    }
+
     // Called when Corridor360's ARCore/CameraX/Panorama pipeline finishes for a node
     fun completeMapping(nodeId: String, panoramaPath: String) = viewModelScope.launch {
         nodeRepo.markMapped(nodeId, panoramaPath)
@@ -51,6 +65,10 @@ class CorridorViewModel(
 
     fun deleteNode(nodeId: String) = viewModelScope.launch {
         nodeRepo.deleteNode(nodeId)
+    }
+
+    fun updateNode(node: NodeEntity) = viewModelScope.launch {
+        nodeRepo.updateNode(node)
     }
 }
 

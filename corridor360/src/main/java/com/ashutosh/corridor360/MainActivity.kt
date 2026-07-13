@@ -34,6 +34,7 @@ import kotlinx.coroutines.withContext
 import org.opencv.android.OpenCVLoader
 import java.io.File
 import com.ashutosh.corridor360.stitching.StitchResult
+
 sealed class Screen {
     object Mapping : Screen()
     data class Capture(val node: NodeEntity) : Screen()
@@ -112,8 +113,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        } // <-- was missing: closes setContent block before onCreate ends
-    } // <-- was missing: closes onCreate itself
+        }
+    }
 
     private fun ensureCameraPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)

@@ -20,6 +20,7 @@ fun MappingScreen(
 ) {
     val nodes by viewModel.allNodes.collectAsState()
     var selectedNode by remember { mutableStateOf<NodeEntity?>(null) }
+    var showAddNodeDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -30,8 +31,13 @@ fun MappingScreen(
                     SyncStatusButton(syncState = syncState, onSyncClick = { viewModel.syncController.triggerSync() })
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAddNodeDialog = true }) {
+                Text("+")
+            }
         }
-        ) { padding ->
+    ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Text(
                 "Pending nodes: ${nodes.count { it.status == "unmapped" }}",
@@ -55,4 +61,76 @@ fun MappingScreen(
             }
         }
     }
+
+    if (showAddNodeDialog) {
+        AddNodeDialog(
+            onDismiss = { showAddNodeDialog = false },
+            onConfirm = { name, floor, x, y ->
+                viewModel.addNode(name, floor, x, y)
+                showAddNodeDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun AddNodeDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, floor: Int, x: Float, y: Float) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var floor by remember { mutableStateOf("0") }
+    var x by remember { mutableStateOf("0") }
+    var y by remember { mutableStateOf("0") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Node") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = floor,
+                    onValueChange = { floor = it },
+                    label = { Text("Floor") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = x,
+                    onValueChange = { x = it },
+                    label = { Text("X") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = y,
+                    onValueChange = { y = it },
+                    label = { Text("Y") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (name.isNotBlank()) {
+                    onConfirm(
+                        name,
+                        floor.toIntOrNull() ?: 0,
+                        x.toFloatOrNull() ?: 0f,
+                        y.toFloatOrNull() ?: 0f
+                    )
+                }
+            }) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
