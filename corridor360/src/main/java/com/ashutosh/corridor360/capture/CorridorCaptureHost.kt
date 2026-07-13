@@ -21,13 +21,6 @@ import com.ashutosh.corridor360.camera.CameraXRecorder
  * already defined in CaptureState below so the enum doesn't need to change
  * either — only this class's internal logic does.
  */
-enum class CaptureState {
-    CAMERA_ACTIVE,
-    STOPPING_CAMERA,
-    ARCORE_READING,
-    RESTARTING_CAMERA,
-    ERROR
-}
 
 class CorridorCaptureHost(
     context: Context,

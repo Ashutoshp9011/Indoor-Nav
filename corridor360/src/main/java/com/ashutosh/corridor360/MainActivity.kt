@@ -65,6 +65,8 @@ class MainActivity : ComponentActivity() {
         val nodeRepo = NodeRepository(db.nodeDao())
         val edgeRepo = EdgeRepository(db.edgeDao())
         val frameDao = db.frameDao()
+        val panoramaDao = db.panoramaDao()
+        val panoramaDir = File(getExternalFilesDir(null), "panoramas")
 
         cameraXRecorder = CameraXRecorder(applicationContext, this)
 
@@ -89,8 +91,10 @@ class MainActivity : ComponentActivity() {
                         is Screen.Capture -> {
                             val captureViewModel: CorridorCaptureViewModel = viewModel(
                                 factory = CaptureViewModelFactory(
-                                    frameDao,
-                                    current.node.nodeId
+                                    frameDao = frameDao,
+                                    panoramaDao = panoramaDao,
+                                    nodeId = current.node.nodeId,
+                                    outputDir = panoramaDir
                                 )
                             )
                             CorridorCaptureScreen(

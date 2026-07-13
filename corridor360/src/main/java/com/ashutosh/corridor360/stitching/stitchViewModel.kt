@@ -37,9 +37,9 @@ class StitchViewModel(
         viewModelScope.launch {
             val result = withContext(Dispatchers.Default) {
                 stitcher.stitch(
-                    framePaths = framePaths,
-                    outputDir = outputDir,
-                    outputFileName = "panorama_$segmentId.jpg"
+                    imagePaths = framePaths,
+                    outDir = outputDir,
+                    fileName = "panorama_$segmentId.jpg"
                 )
             }
 

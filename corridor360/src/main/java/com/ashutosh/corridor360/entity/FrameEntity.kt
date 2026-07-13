@@ -1,4 +1,4 @@
-package com.ashutosh.corridor360.Data.local.entity
+package com.ashutosh.corridor360.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

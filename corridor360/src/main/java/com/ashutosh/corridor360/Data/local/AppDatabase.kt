@@ -7,13 +7,14 @@ import androidx.room.RoomDatabase
 import com.ashutosh.corridor360.Data.local.dao.EdgeDao
 import com.ashutosh.corridor360.Data.local.dao.NodeDao
 import com.ashutosh.corridor360.Data.local.dao.FrameDao
-import com.ashutosh.corridor360.Data.local.entity.FrameEntity
+import com.ashutosh.corridor360.Data.local.dao.PanoramaDao
+import com.ashutosh.corridor360.entity.FrameEntity
 import com.ashutosh.corridor360.entity.NodeEntity
-// TODO: add the real import path for EdgeEntity — not shown in what you've sent me
+import com.ashutosh.corridor360.entity.PanoramaEntity
 
 @Database(
-    entities = [NodeEntity::class, EdgeEntity::class, FrameEntity::class],
-    version = 2,
+    entities = [NodeEntity::class, EdgeEntity::class, FrameEntity::class, PanoramaEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -21,6 +22,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun nodeDao(): NodeDao
     abstract fun edgeDao(): EdgeDao
     abstract fun frameDao(): FrameDao
+    abstract fun panoramaDao(): PanoramaDao
 
     companion object {
         @Volatile
