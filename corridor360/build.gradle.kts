@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.compose.material:material-icons-extended:1.7.6")
+    implementation("androidx.compose.material:material-icons-extended")
 
     // CameraX
     implementation("androidx.camera:camera-core:1.3.4")

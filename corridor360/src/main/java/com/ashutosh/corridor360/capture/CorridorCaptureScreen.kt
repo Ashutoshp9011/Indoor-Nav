@@ -1,6 +1,8 @@
-package com.ashutosh.corridor360.capture // TODO: match your package
+package com.ashutosh.corridor360.capture
 
+import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,16 +14,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.camera.view.PreviewView
+import com.ashutosh.corridor360.heading.SensorHeadingProvider
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 
-/**
- * Corridor360 capture screen.
- *
- * CameraX preview + sequential ARCore pose reads are fully owned by
- * CorridorCaptureHost — this Composable only renders state and forwards
- * user taps. No continuous pose feed, no coverage ring: ARCore only runs
- * in short bursts between CameraX stop/restart (see CorridorCaptureHost).
- */
 @Composable
 fun CorridorCaptureScreen(
     viewModel: CorridorCaptureViewModel,
@@ -29,58 +25,156 @@ fun CorridorCaptureScreen(
     onFinishSegment: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    val headingProvider = remember { SensorHeadingProvider(context) }
+
+    var currentYaw by remember {
+        mutableStateOf(0f)
+    }
+
+    // Auto-capture configuration
+    val intervalDeg = 45f
+    var capturedBuckets by remember {
+        mutableStateOf(setOf<Int>())
+    }
+
+    DisposableEffect(Unit) {
+        headingProvider.start()
+
+        onDispose {
+            headingProvider.stop()
+        }
+    }
 
     val host = remember(nodeId) {
         CorridorCaptureHost(
             context = context,
             lifecycleOwner = lifecycleOwner,
             nodeId = nodeId,
-            onStateChanged = { state -> viewModel.onCaptureStateChanged(state) },
-            onPoseCaptured = { pose, imagePath -> viewModel.onPoseCaptured(pose, imagePath) },
-            onError = { message -> viewModel.onError(message) }
+            onStateChanged = {
+                viewModel.onCaptureStateChanged(it)
+            },
+            onPoseCaptured = { pose, imagePath ->
+                viewModel.onPoseCaptured(pose, imagePath)
+            },
+            onError = {
+                viewModel.onError(it)
+            }
         )
     }
+
     DisposableEffect(host) {
         onDispose {
             host.release()
         }
     }
 
-    LaunchedEffect(viewModel.events) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is CaptureEvent.NavigateToStitching -> onFinishSegment()
+    // Heading updates + automatic capture
+    LaunchedEffect(Unit) {
+        headingProvider.headingDeg.collect { yaw ->
+
+            currentYaw = yaw
+
+            if (
+                uiState.captureState == CaptureState.CAMERA_ACTIVE &&
+                uiState.framesCaptured < 8
+            ) {
+
+                val normalizedYaw =
+                    ((yaw % 360f) + 360f) % 360f
+
+                val bucket =
+                    (normalizedYaw / intervalDeg).toInt()
+
+                if (bucket !in capturedBuckets) {
+
+                    capturedBuckets =
+                        capturedBuckets + bucket
+
+                    host.onCaptureRequested()
+                }
             }
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Reset bucket history whenever a new capture session starts
+    LaunchedEffect(uiState.captureState) {
+        if (uiState.captureState != CaptureState.CAMERA_ACTIVE) {
+            capturedBuckets = emptySet()
+        }
+    }
+
+    LaunchedEffect(viewModel.events) {
+        viewModel.events.collect { event ->
+
+            when (event) {
+
+                is CaptureEvent.NavigateToStitching -> {
+                    onFinishSegment()
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+
         AndroidView(
             factory = { ctx ->
+
                 PreviewView(ctx).apply {
-                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+
+                    implementationMode =
+                        PreviewView.ImplementationMode.COMPATIBLE
+
                     host.startPreview(this)
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // UI Overlays
+        // Heading overlay
+        if (uiState.captureState == CaptureState.CAMERA_ACTIVE) {
+
+            HeadingGuideOverlay(
+                currentYawDeg = currentYaw,
+                framesCaptured = uiState.framesCaptured,
+                totalTargets = 8
+            )
+        }
+
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 48.dp),
+
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (uiState.errorMessage != null) {
-                Text(
-                    text = uiState.errorMessage!!,
-                    color = Color.Red,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(16.dp)
-                )
+
+            uiState.errorMessage?.let {
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = it,
+                        color = Color.Red,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    TextButton(
+                        onClick = { viewModel.onCaptureStateChanged(CaptureState.CAMERA_ACTIVE) }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White
+                        )
+                        Text(" Dismiss", color = Color.White)
+                    }
+                }
             }
 
             Text(
@@ -90,41 +184,78 @@ fun CorridorCaptureScreen(
                 fontWeight = FontWeight.Medium
             )
 
-            uiState.lastDistanceMeters?.let { dist ->
+            uiState.lastDistanceMeters?.let {
+
                 Text(
-                    text = "Last Distance: %.2fm".format(dist),
+                    text = "Last Distance: %.2fm".format(it),
                     color = Color.White,
                     fontSize = 14.sp
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(
+                modifier = Modifier.height(24.dp)
+            )
 
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+
                 Button(
-                    onClick = { host.onCaptureRequested() },
+                    onClick = {
+                        host.onCaptureRequested()
+                    },
                     enabled = uiState.captureState == CaptureState.CAMERA_ACTIVE,
-                    modifier = Modifier.size(80.dp),
-                    shape = androidx.compose.foundation.shape.CircleShape
+                    modifier = Modifier.size(72.dp),
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Text("Capture")
+                    Text("Capture", fontSize = 12.sp)
                 }
 
                 if (uiState.readyToStitch) {
+
                     ExtendedFloatingActionButton(
-                        onClick = { viewModel.onStitchRequested() },
-                        text = { Text("Finish & Stitch") },
-                        icon = { /* Add icon if desired */ }
+                        onClick = {
+                            viewModel.onStitchRequested()
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Finish"
+                            )
+                        },
+                        text = {
+                            Text("Finish & Stitch")
+                        }
                     )
                 }
             }
         }
 
-        if (uiState.captureState != CaptureState.CAMERA_ACTIVE && uiState.captureState != CaptureState.ERROR) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        if (
+            uiState.captureState != CaptureState.CAMERA_ACTIVE &&
+            uiState.captureState != CaptureState.ERROR
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Black.copy(alpha = 0.7f)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(color = Color.White)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = if (uiState.captureState == CaptureState.STITCHING)
+                            "Stitching Panorama..." else "Finalizing...",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }

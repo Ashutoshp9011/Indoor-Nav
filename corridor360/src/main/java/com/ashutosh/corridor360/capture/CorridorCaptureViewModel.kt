@@ -36,6 +36,7 @@ class CorridorCaptureViewModel(
         _uiState.update { it.copy(captureState = state) }
     }
 
+    // Called by CorridorCaptureHost after a real CameraX+ARCore capture completes
     fun onPoseCaptured(pose: CapturePose, imagePath: String) {
         viewModelScope.launch {
             repository.saveFrame(
@@ -65,17 +66,20 @@ class CorridorCaptureViewModel(
             _uiState.update { it.copy(captureState = CaptureState.STITCHING) }
             val frames = repository.getFramesForSession(segmentId)
             val imagePaths = frames.map { it.imagePath }
-            
-            val result = panoramaStitcher.stitch(imagePaths)
-            
-            when (result) {
+
+            when (val result = panoramaStitcher.stitch(imagePaths)) {
                 is StitchResult.Success -> {
                     repository.saveStitchedPanorama(segmentId, result.outputPath)
                     _uiState.update { it.copy(captureState = CaptureState.STITCH_COMPLETE) }
                     _events.emit(CaptureEvent.NavigateToStitching)
                 }
                 is StitchResult.Failure -> {
-                    _uiState.update { it.copy(errorMessage = "Stitch failed: ${result.reason}", captureState = CaptureState.ERROR) }
+                    _uiState.update {
+                        it.copy(
+                            errorMessage = "Stitch failed: ${result.reason}",
+                            captureState = CaptureState.ERROR
+                        )
+                    }
                 }
             }
         }
