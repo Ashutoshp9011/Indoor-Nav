@@ -7,19 +7,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.atan2
 
-private val ScrimColor = Color.Black.copy(alpha = 0.35f)
-private val TrackDotColor = Color.White
-private val TargetDotColor = Color(0xFFFF6D2E) // orange
-private val CoverageArcColor = Color.Black.copy(alpha = 0.55f)
+private val TargetDotColor = Color(0xFFFF6D2E)
+private val TargetRingColor = Color.White
+private val ArrowColor = Color.White.copy(alpha = 0.85f)
 
-/**
- * Continuous orbit-scan guide overlay.
- * - Dark scrim over camera feed
- * - Dotted track from current heading (white ring) to next auto-capture target (orange dot)
- * - Bottom coverage arc fills as more of the 360° range gets captured
- */
 @Composable
 fun HeadingGuideOverlay(
     currentYawDeg: Float,
@@ -28,60 +25,60 @@ fun HeadingGuideOverlay(
     modifier: Modifier = Modifier
 ) {
     val intervalDeg = 360f / totalTargets
-    val nextTargetYaw = ((framesCaptured % totalTargets) * intervalDeg)
+    val nextTargetYaw = (framesCaptured % totalTargets) * intervalDeg
 
     var delta = nextTargetYaw - currentYawDeg
-    delta = ((delta + 540f) % 360f) - 180f // normalize -180..180
-
-    val coverageFraction = (framesCaptured.coerceAtMost(totalTargets)) / totalTargets.toFloat()
+    delta = ((delta + 540f) % 360f) - 180f // -180..180
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        // Scrim
-        drawRect(color = ScrimColor)
+        val originX = size.width / 2f
+        val originY = size.height * 0.55f
+        val previewRadius = size.width * 0.15f  // small circular live-camera preview position
+        val targetDotRadius = size.width * 0.09f // ENLARGED target dot (was ~16f fixed px)
 
-        // --- Track (top third) ---
-        val trackY = size.height * 0.28f
-        val trackWidth = size.width * 0.6f
-        val centerX = size.width / 2f
-        val maxOffset = trackWidth / 2f
-        val targetX = centerX + (delta / 180f) * maxOffset
+        val angleRad = Math.toRadians((delta).toDouble())
+        val targetX = originX + previewRadius * 3f * sin(angleRad).toFloat()
+        val targetY = originY - previewRadius * 3f * cos(angleRad).toFloat()
+
+        // Dashed arrow from preview position toward target
+        val start = Offset(originX, originY - previewRadius)
+        val end = Offset(targetX, targetY + targetDotRadius)
 
         drawLine(
-            color = Color.White.copy(alpha = 0.6f),
-            start = Offset(centerX, trackY),
-            end = Offset(targetX, trackY),
-            strokeWidth = 4f,
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f))
+            color = ArrowColor,
+            start = start,
+            end = end,
+            strokeWidth = 6f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 16f))
         )
 
-        // Current position (hollow ring, fixed center)
+        // Arrowhead
+        val arrowAngle = atan2((end.y - start.y), (end.x - start.x))
+        val headLength = 30f
+        val path = Path().apply {
+            moveTo(end.x, end.y)
+            lineTo(
+                end.x - headLength * cos(arrowAngle - 0.4f),
+                end.y - headLength * sin(arrowAngle - 0.4f)
+            )
+            moveTo(end.x, end.y)
+            lineTo(
+                end.x - headLength * cos(arrowAngle + 0.4f),
+                end.y - headLength * sin(arrowAngle + 0.4f)
+            )
+        }
+        drawPath(path, color = ArrowColor, style = Stroke(width = 6f))
+
+        // Target dot (large, filled orange + white ring) — SIZE INCREASES as it's approached
+        val proximity = 1f - (kotlin.math.abs(delta) / 180f) // 0..1, 1 = aligned
+        val dynamicRadius = targetDotRadius * (0.7f + 0.5f * proximity)
+
+        drawCircle(color = TargetDotColor, radius = dynamicRadius, center = Offset(targetX, targetY))
         drawCircle(
-            color = TrackDotColor,
-            radius = 18f,
-            center = Offset(centerX, trackY),
-            style = Stroke(width = 5f)
-        )
-
-        // Target dot (solid orange)
-        drawCircle(
-            color = TargetDotColor,
-            radius = 16f,
-            center = Offset(targetX, trackY)
-        )
-
-        // --- Coverage arc (bottom) ---
-        val arcSize = size.width * 1.4f
-        val arcTopLeft = Offset(
-            x = (size.width - arcSize) / 2f,
-            y = size.height - arcSize / 2f
-        )
-        drawArc(
-            color = CoverageArcColor,
-            startAngle = 180f,
-            sweepAngle = 180f * coverageFraction,
-            useCenter = true,
-            topLeft = arcTopLeft,
-            size = androidx.compose.ui.geometry.Size(arcSize, arcSize)
+            color = TargetRingColor,
+            radius = dynamicRadius + 10f,
+            center = Offset(targetX, targetY),
+            style = Stroke(width = 6f)
         )
     }
 }
