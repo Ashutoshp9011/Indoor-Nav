@@ -7,7 +7,6 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import com.ashutosh.corridor360.heading.SensorHeadingProvider
 
 class SensorHeadingProvider(
     context: Context
@@ -18,16 +17,19 @@ class SensorHeadingProvider(
     private val rotationSensor =
         sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
 
+    val isAvailable: Boolean get() = rotationSensor != null
+
     private val rotationMatrix = FloatArray(9)
     private val orientationAngles = FloatArray(3)
 
     private val _headingDeg = MutableStateFlow(0f)
     val headingDeg: StateFlow<Float> = _headingDeg
 
-    fun start() {
-        rotationSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-        }
+    /** Returns false if there's no rotation-vector sensor on this device — caller should surface an error. */
+    fun start(): Boolean {
+        val sensor = rotationSensor ?: return false
+        sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI)
+        return true
     }
 
     fun stop() {

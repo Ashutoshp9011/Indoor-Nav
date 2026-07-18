@@ -35,6 +35,10 @@ class CorridorCaptureHost(
 
     fun startPreview(view: PreviewView) {
         previewView = view
+        // A prior attempt for this node may have left frames behind if stitching
+        // failed (clearFrames is only called on success) — start clean so those
+        // don't get mixed into this session's stitch input.
+        cameraRecorder.clearFrames(nodeId)
         onStateChanged(CaptureState.CAMERA_ACTIVE)
         cameraRecorder.startCamera(
             previewView = view,
@@ -87,6 +91,10 @@ class CorridorCaptureHost(
         //     }
         // })
         */
+    }
+
+    fun toggleFlash(enabled: Boolean) {
+        cameraRecorder.setTorchEnabled(enabled)
     }
 
     fun release() {

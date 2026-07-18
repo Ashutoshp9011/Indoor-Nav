@@ -17,6 +17,7 @@ interface CorridorCaptureRepository {
     suspend fun saveFrame(imagePath: String, x: Float, y: Float, z: Float, yawDegrees: Float)
     suspend fun getFramesForSession(segmentId: String): List<CorridorFrame>
     suspend fun saveStitchedPanorama(segmentId: String, panoramaPath: String)
+    suspend fun clearSession(segmentId: String)
 }
 
 /**
@@ -61,5 +62,9 @@ class CorridorCaptureRepositoryImpl(
                 panoramaPath = panoramaPath
             )
         )
+    }
+
+    override suspend fun clearSession(segmentId: String) {
+        frameDao.deleteFramesForSegment(segmentId)
     }
 }

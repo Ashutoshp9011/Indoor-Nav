@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 
 data class CaptureUiState(
     val framesCaptured: Int = 0,
+    val framePaths: List<String> = emptyList(),
     val lastDistanceMeters: Float? = null,
     val captureState: CaptureState = CaptureState.CAMERA_ACTIVE,
     val errorMessage: String? = null,
@@ -17,7 +18,7 @@ data class CaptureUiState(
 )
 
 sealed class CaptureEvent {
-    object NavigateToStitching : CaptureEvent()
+    data class NavigateToStitching(val outputPath: String) : CaptureEvent()
 }
 
 class CorridorCaptureViewModel(
@@ -31,6 +32,15 @@ class CorridorCaptureViewModel(
 
     private val _events = MutableSharedFlow<CaptureEvent>()
     val events: SharedFlow<CaptureEvent> = _events.asSharedFlow()
+
+    init {
+        // A prior attempt for this node may have left rows behind if stitching
+        // failed (only cleared on success) — start this session with a clean slate
+        // so old frames don't get counted or fed into the next stitch.
+        viewModelScope.launch {
+            repository.clearSession(segmentId)
+        }
+    }
 
     fun onCaptureStateChanged(state: CaptureState) {
         _uiState.update { it.copy(captureState = state) }
@@ -50,6 +60,7 @@ class CorridorCaptureViewModel(
             _uiState.update {
                 it.copy(
                     framesCaptured = frames.size,
+                    framePaths = frames.map { f -> f.imagePath },
                     lastDistanceMeters = pose.distanceMeters,
                     readyToStitch = frames.size >= 2
                 )
@@ -71,7 +82,7 @@ class CorridorCaptureViewModel(
                 is StitchResult.Success -> {
                     repository.saveStitchedPanorama(segmentId, result.outputPath)
                     _uiState.update { it.copy(captureState = CaptureState.STITCH_COMPLETE) }
-                    _events.emit(CaptureEvent.NavigateToStitching)
+                    _events.emit(CaptureEvent.NavigateToStitching(result.outputPath))
                 }
                 is StitchResult.Failure -> {
                     _uiState.update {

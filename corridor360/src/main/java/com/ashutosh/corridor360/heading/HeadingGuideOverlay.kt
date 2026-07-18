@@ -21,6 +21,7 @@ private val ArrowColor = Color.White.copy(alpha = 0.85f)
 fun HeadingGuideOverlay(
     currentYawDeg: Float,
     framesCaptured: Int,
+    capturedBuckets: Set<Int> = emptySet(),
     totalTargets: Int = 8,
     modifier: Modifier = Modifier
 ) {
@@ -33,8 +34,32 @@ fun HeadingGuideOverlay(
     Canvas(modifier = modifier.fillMaxSize()) {
         val originX = size.width / 2f
         val originY = size.height * 0.55f
-        val previewRadius = size.width * 0.15f  // small circular live-camera preview position
+        // Full-screen preview now, so overlay geometry is sized off full frame, not a small circle
+        val previewRadius = size.width * 0.15f  // radius of the invisible sphere's projection, used for arrow math
         val targetDotRadius = size.width * 0.09f // ENLARGED target dot (was ~16f fixed px)
+
+        // --- Center alignment crosshair: the user's position at the center of the invisible sphere ---
+        val crosshairLen = size.width * 0.03f
+        drawLine(
+            color = Color.White.copy(alpha = 0.9f),
+            start = Offset(originX - crosshairLen, originY),
+            end = Offset(originX + crosshairLen, originY),
+            strokeWidth = 4f
+        )
+        drawLine(
+            color = Color.White.copy(alpha = 0.9f),
+            start = Offset(originX, originY - crosshairLen),
+            end = Offset(originX, originY + crosshairLen),
+            strokeWidth = 4f
+        )
+
+        // --- Horizon level line: static, independent of yaw, helps keep phone level for stitching ---
+        drawLine(
+            color = Color.Green.copy(alpha = 0.6f),
+            start = Offset(0f, originY),
+            end = Offset(size.width, originY),
+            strokeWidth = 3f
+        )
 
         val angleRad = Math.toRadians((delta).toDouble())
         val targetX = originX + previewRadius * 3f * sin(angleRad).toFloat()
@@ -79,6 +104,67 @@ fun HeadingGuideOverlay(
             radius = dynamicRadius + 10f,
             center = Offset(targetX, targetY),
             style = Stroke(width = 6f)
+        )
+    }
+}
+
+/**
+ * Top-view mini radar of the capture model: the user is imagined standing at the
+ * center of an invisible sphere, and each capture is a point on that sphere at a
+ * fixed bearing (0°, 45°, 90°... for 8 targets). This mirrors the reference app's
+ * "TOP VIEW – CAPTURE PATTERN" diagram, rendered live during capture.
+ */
+@Composable
+fun SphereCaptureRadar(
+    currentYawDeg: Float,
+    capturedBuckets: Set<Int>,
+    totalTargets: Int = 8,
+    modifier: Modifier = Modifier
+) {
+    val intervalDeg = 360f / totalTargets
+
+    Canvas(modifier = modifier) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val ringRadius = size.minDimension * 0.38f
+        val dotRadius = size.minDimension * 0.06f
+
+        // Sphere ring (dashed, matches the dashed circle in the reference top-view)
+        drawCircle(
+            color = Color.White.copy(alpha = 0.4f),
+            radius = ringRadius,
+            center = Offset(cx, cy),
+            style = Stroke(width = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 10f)))
+        )
+
+        // User at the center of the sphere
+        drawCircle(color = Color.White, radius = dotRadius * 0.7f, center = Offset(cx, cy))
+
+        // One point on the sphere per target bearing
+        for (bucket in 0 until totalTargets) {
+            val bearingDeg = bucket * intervalDeg
+            val angleRad = Math.toRadians(bearingDeg.toDouble())
+            val px = cx + ringRadius * sin(angleRad).toFloat()
+            val py = cy - ringRadius * cos(angleRad).toFloat()
+
+            val captured = bucket in capturedBuckets
+            drawCircle(
+                color = if (captured) Color(0xFF4CAF50) else Color.White.copy(alpha = 0.5f),
+                radius = dotRadius,
+                center = Offset(px, py)
+            )
+        }
+
+        // Live bearing indicator: where the user is currently facing on the sphere
+        val yawRad = Math.toRadians(currentYawDeg.toDouble())
+        drawLine(
+            color = Color(0xFFFF6D2E),
+            start = Offset(cx, cy),
+            end = Offset(
+                cx + ringRadius * sin(yawRad).toFloat(),
+                cy - ringRadius * cos(yawRad).toFloat()
+            ),
+            strokeWidth = 4f
         )
     }
 }

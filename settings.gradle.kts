@@ -18,6 +18,4 @@ rootProject.name = "Corridor360"
 
 include(":corridor360")
 include(":entrance-mapper")
-include(":opencv")
-project(":opencv").projectDir = File("sdk")
 

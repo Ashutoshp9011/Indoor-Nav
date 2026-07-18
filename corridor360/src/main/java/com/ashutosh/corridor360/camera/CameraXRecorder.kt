@@ -79,6 +79,12 @@ class CameraXRecorder(
         )
     }
 
+    fun setTorchEnabled(enabled: Boolean) {
+        camera?.cameraControl?.enableTorch(enabled)
+    }
+
+    fun hasFlashUnit(): Boolean = camera?.cameraInfo?.hasFlashUnit() ?: false
+
     fun framesForNode(nodeId: String): List<String> =
         File(context.getExternalFilesDir(null), "panorama_frames/$nodeId")
             .listFiles()?.map { it.absolutePath }?.sorted() ?: emptyList()

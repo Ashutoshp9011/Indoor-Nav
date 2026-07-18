@@ -19,21 +19,15 @@ import com.ashutosh.corridor360.Data.local.AppDatabase
 import com.ashutosh.corridor360.entity.NodeEntity
 import com.ashutosh.corridor360.Data.repository.EdgeRepository
 import com.ashutosh.corridor360.Data.repository.NodeRepository
-import com.ashutosh.corridor360.camera.CameraXRecorder
 import com.ashutosh.corridor360.ui.CorridorViewModel
 import com.ashutosh.corridor360.ui.CorridorViewModelFactory
 import com.ashutosh.corridor360.mapping.MappingScreen
 import com.ashutosh.corridor360.ui.theme.Corridor360Theme
-import com.ashutosh.corridor360.stitching.PanoramaStitcher
 import com.ashutosh.corridor360.capture.CorridorCaptureScreen
 import com.ashutosh.corridor360.capture.CorridorCaptureViewModel
 import com.ashutosh.corridor360.capture.CaptureViewModelFactory
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.opencv.android.OpenCVLoader
 import java.io.File
-import com.ashutosh.corridor360.stitching.StitchResult
 
 sealed class Screen {
     object Mapping : Screen()
@@ -42,13 +36,18 @@ sealed class Screen {
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var cameraXRecorder: CameraXRecorder
     private var pendingCaptureNode: NodeEntity? = null
+
+    private var cameraPermissionGranted by mutableStateOf(false)
+    private var onPermissionResult: ((Boolean) -> Unit)? = null
 
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
+        cameraPermissionGranted = granted
         if (!granted) Log.e("MainActivity", "Camera permission denied — capture flow blocked")
+        onPermissionResult?.invoke(granted)
+        onPermissionResult = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,6 +59,8 @@ class MainActivity : ComponentActivity() {
         }
 
         ensureCameraPermission()
+        cameraPermissionGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
 
         val dbFile = File(getExternalFilesDir(null), "corridor_graph.sqlite")
         val db = AppDatabase.getInstance(applicationContext, dbFile.absolutePath)
@@ -69,15 +70,13 @@ class MainActivity : ComponentActivity() {
         val panoramaDao = db.panoramaDao()
         val panoramaDir = File(getExternalFilesDir(null), "panoramas")
 
-        cameraXRecorder = CameraXRecorder(applicationContext, this)
-
         setContent {
             Corridor360Theme {
                 val viewModel: CorridorViewModel = viewModel(
                     factory = CorridorViewModelFactory(nodeRepo, edgeRepo)
                 )
                 var screen by remember { mutableStateOf<Screen>(Screen.Mapping) }
-                val scope = rememberCoroutineScope()
+                val permissionGranted = cameraPermissionGranted
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
                     when (val current = screen) {
@@ -85,12 +84,24 @@ class MainActivity : ComponentActivity() {
                             viewModel = viewModel,
                             onStartCapture = { node ->
                                 pendingCaptureNode = node
-                                ensureCameraPermission()
-                                screen = Screen.Capture(node)
+                                if (permissionGranted) {
+                                    screen = Screen.Capture(node)
+                                } else {
+                                    onPermissionResult = { granted ->
+                                        if (granted) {
+                                            screen = Screen.Capture(node)
+                                        } else {
+                                            Log.w("MainActivity", "Capture blocked — camera permission denied")
+                                            pendingCaptureNode = null
+                                        }
+                                    }
+                                    ensureCameraPermission()
+                                }
                             }
                         )
                         is Screen.Capture -> {
                             val captureViewModel: CorridorCaptureViewModel = viewModel(
+                                key = current.node.nodeId,
                                 factory = CaptureViewModelFactory(
                                     frameDao = frameDao,
                                     panoramaDao = panoramaDao,
@@ -101,12 +112,9 @@ class MainActivity : ComponentActivity() {
                             CorridorCaptureScreen(
                                 viewModel = captureViewModel,
                                 nodeId = current.node.nodeId,
-                                onFinishSegment = {
-                                    scope.launch {
-                                        finishCapture(node = current.node, viewModel = viewModel) {
-                                            screen = Screen.Mapping
-                                        }
-                                    }
+                                onFinishSegment = { outputPath ->
+                                    viewModel.completeMapping(current.node.nodeId, outputPath)
+                                    screen = Screen.Mapping
                                 }
                             )
                         }
@@ -124,36 +132,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun finishCapture(
-        node: NodeEntity,
-        viewModel: CorridorViewModel,
-        onDone: () -> Unit
-    ) {
-        val frames = cameraXRecorder.framesForNode(node.nodeId)
-        if (frames.size < 2) {
-            Log.w("MainActivity", "Not enough frames captured for ${node.nodeId}")
-            onDone()
-            return
-        }
-
-        val outputDir = File(getExternalFilesDir(null), "panoramas")
-        val result = withContext(Dispatchers.Default) {
-            PanoramaStitcher().stitch(frames, outputDir, node.nodeId)
-        }
-        when (result) {
-            is StitchResult.Success -> {
-                viewModel.completeMapping(node.nodeId, result.outputPath)
-                cameraXRecorder.clearFrames(node.nodeId)
-            }
-            is StitchResult.Failure -> {
-                Log.e("MainActivity", "Stitch failed: ${result.reason}")
-            }
-        }
-        onDone()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        cameraXRecorder.stopCamera()
-    }
 }
