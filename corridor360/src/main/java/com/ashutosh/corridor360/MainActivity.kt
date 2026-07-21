@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
 
         ensureCameraPermission()
         cameraPermissionGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
-            PackageManager.PERMISSION_GRANTED
+                PackageManager.PERMISSION_GRANTED
 
         val dbFile = File(getExternalFilesDir(null), "corridor_graph.sqlite")
         val db = AppDatabase.getInstance(applicationContext, dbFile.absolutePath)
@@ -112,8 +112,14 @@ class MainActivity : ComponentActivity() {
                             CorridorCaptureScreen(
                                 viewModel = captureViewModel,
                                 nodeId = current.node.nodeId,
-                                onFinishSegment = { outputPath ->
-                                    viewModel.completeMapping(current.node.nodeId, outputPath)
+                                onFinishSegment = { outputPathsByLayer ->
+                                    // All 3 layers succeeded (onFinishSegment only fires on full
+                                    // success). Store the MIDDLE-ring panorama as the node's
+                                    // representative thumbnail — the other layers' paths are
+                                    // already persisted per-layer via PanoramaDao.
+                                    val representativePath = outputPathsByLayer["MIDDLE"]
+                                        ?: outputPathsByLayer.values.first()
+                                    viewModel.completeMapping(current.node.nodeId, representativePath)
                                     screen = Screen.Mapping
                                 }
                             )

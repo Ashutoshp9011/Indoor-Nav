@@ -14,5 +14,6 @@ data class FrameEntity(
     val yawDegrees: Float,
     val timestamp: Long = System.currentTimeMillis(),
     val segmentId: String,
+    val layer: String,
     val synced: Boolean = false
 )

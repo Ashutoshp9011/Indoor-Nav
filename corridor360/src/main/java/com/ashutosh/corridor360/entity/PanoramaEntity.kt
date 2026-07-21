@@ -9,5 +9,6 @@ import androidx.room.PrimaryKey
 data class PanoramaEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val segmentId: String,
+    val layer: String,
     val panoramaPath: String
 )

@@ -14,9 +14,10 @@ data class CorridorFrame(
 )
 
 interface CorridorCaptureRepository {
-    suspend fun saveFrame(imagePath: String, x: Float, y: Float, z: Float, yawDegrees: Float)
-    suspend fun getFramesForSession(segmentId: String): List<CorridorFrame>
-    suspend fun saveStitchedPanorama(segmentId: String, panoramaPath: String)
+    suspend fun saveFrame(imagePath: String, x: Float, y: Float, z: Float, yawDegrees: Float, layer: String)
+    suspend fun getFramesForSession(segmentId: String, layer: String): List<CorridorFrame>
+    suspend fun getLayersForSession(segmentId: String): List<String>
+    suspend fun saveStitchedPanorama(segmentId: String, layer: String, panoramaPath: String)
     suspend fun clearSession(segmentId: String)
 }
 
@@ -30,7 +31,7 @@ class CorridorCaptureRepositoryImpl(
     private val segmentId: String
 ) : CorridorCaptureRepository {
 
-    override suspend fun saveFrame(imagePath: String, x: Float, y: Float, z: Float, yawDegrees: Float) {
+    override suspend fun saveFrame(imagePath: String, x: Float, y: Float, z: Float, yawDegrees: Float, layer: String) {
         frameDao.insert(
             FrameEntity(
                 imagePath = imagePath,
@@ -38,13 +39,14 @@ class CorridorCaptureRepositoryImpl(
                 y = y,
                 z = z,
                 yawDegrees = yawDegrees,
-                segmentId = segmentId
+                segmentId = segmentId,
+                layer = layer
             )
         )
     }
 
-    override suspend fun getFramesForSession(segmentId: String): List<CorridorFrame> {
-        return frameDao.getFramesForSegment(segmentId).map {
+    override suspend fun getFramesForSession(segmentId: String, layer: String): List<CorridorFrame> {
+        return frameDao.getFramesForSegmentLayer(segmentId, layer).map {
             CorridorFrame(
                 imagePath = it.imagePath,
                 x = it.x,
@@ -55,10 +57,15 @@ class CorridorCaptureRepositoryImpl(
         }
     }
 
-    override suspend fun saveStitchedPanorama(segmentId: String, panoramaPath: String) {
+    override suspend fun getLayersForSession(segmentId: String): List<String> {
+        return frameDao.getLayersForSegment(segmentId)
+    }
+
+    override suspend fun saveStitchedPanorama(segmentId: String, layer: String, panoramaPath: String) {
         panoramaDao.insert(
             PanoramaEntity(
                 segmentId = segmentId,
+                layer = layer,
                 panoramaPath = panoramaPath
             )
         )

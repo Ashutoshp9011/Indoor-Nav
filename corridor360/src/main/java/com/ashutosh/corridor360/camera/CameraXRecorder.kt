@@ -19,6 +19,7 @@ class CameraXRecorder(
     private var camera: Camera? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private val capturedFrames = mutableListOf<String>()
+    private var frameCounter = 0
 
     // Call once when entering the capture screen for a node
     fun startCamera(
@@ -59,7 +60,11 @@ class CameraXRecorder(
         val capture = imageCapture ?: return onError(IllegalStateException("Camera not started"))
 
         val dir = File(context.getExternalFilesDir(null), "panorama_frames/$nodeId").apply { mkdirs() }
-        val name = SimpleDateFormat("HHmmss_SSS", Locale.US).format(Date()) + ".jpg"
+        // Timestamp alone can collide if two captures land in the same millisecond
+        // (e.g. a race before the CAPTURING-state guard was added) — a collision
+        // silently overwrites the earlier frame instead of erroring. The counter
+        // suffix makes every filename unique regardless.
+        val name = SimpleDateFormat("HHmmss_SSS", Locale.US).format(Date()) + "_${frameCounter++}.jpg"
         val file = File(dir, name)
         val outputOptions = ImageCapture.OutputFileOptions.Builder(file).build()
 

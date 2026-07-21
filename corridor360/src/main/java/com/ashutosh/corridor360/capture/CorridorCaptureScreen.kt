@@ -20,16 +20,28 @@ import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.PhotoLibrary
 
-private fun guidanceMessage(state: CaptureState, framesCaptured: Int, total: Int): String {
+private fun guidanceMessage(
+    state: CaptureState,
+    layer: CaptureLayer,
+    layerBucketsCaptured: Int,
+    inLayerBand: Boolean,
+    framesPerLayer: Int
+): String {
     if (state == CaptureState.STITCHING || state == CaptureState.STITCH_COMPLETE) {
         return "Great! Uploading your images"
     }
-    val progress = framesCaptured.toFloat() / total
+    if (!inLayerBand) {
+        return when (layer) {
+            CaptureLayer.MIDDLE -> "Hold the phone level"
+            CaptureLayer.TOP -> "Tilt the phone up toward the ceiling"
+            CaptureLayer.BOTTOM -> "Tilt the phone down toward the floor"
+        }
+    }
+    val progress = layerBucketsCaptured.toFloat() / framesPerLayer
     return when {
-        framesCaptured == 0 -> "Stand in the center of the room"
-        progress < 0.5f -> "Rotate slowly to the left"
-        progress < 0.9f -> "Keep the phone level"
-        else -> "Almost complete"
+        layerBucketsCaptured == 0 -> "Rotate slowly — capturing the ${layer.label} ring"
+        progress < 0.9f -> "Keep rotating"
+        else -> "Almost done with this ring"
     }
 }
 
@@ -37,7 +49,7 @@ private fun guidanceMessage(state: CaptureState, framesCaptured: Int, total: Int
 fun CorridorCaptureScreen(
     viewModel: CorridorCaptureViewModel,
     nodeId: String,
-    onFinishSegment: (outputPath: String) -> Unit
+    onFinishSegment: (outputPathsByLayer: Map<String, String>) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -47,9 +59,19 @@ fun CorridorCaptureScreen(
     val headingProvider = remember { SensorHeadingProvider(context) }
 
     var currentYaw by remember { mutableStateOf(0f) }
+    var currentPitch by remember { mutableStateOf(0f) }
 
     val intervalDeg = 45f
-    var capturedBuckets by remember { mutableStateOf(setOf<Int>()) }
+    val framesPerLayer = 8
+    val totalFrames = framesPerLayer * CaptureLayer.scanOrder.size
+
+    var currentLayerIndex by remember { mutableStateOf(0) }
+    val currentLayer = CaptureLayer.scanOrder[currentLayerIndex]
+
+    var capturedBucketsByLayer by remember {
+        mutableStateOf(CaptureLayer.scanOrder.associateWith { emptySet<Int>() })
+    }
+    val capturedBuckets = capturedBucketsByLayer[currentLayer] ?: emptySet()
     var flashOn by remember { mutableStateOf(false) }
     var showGallery by remember { mutableStateOf(false) }
 
@@ -67,7 +89,7 @@ fun CorridorCaptureScreen(
             lifecycleOwner = lifecycleOwner,
             nodeId = nodeId,
             onStateChanged = { viewModel.onCaptureStateChanged(it) },
-            onPoseCaptured = { pose, imagePath -> viewModel.onPoseCaptured(pose, imagePath) },
+            onPoseCaptured = { pose, imagePath, layer -> viewModel.onPoseCaptured(pose, imagePath, layer) },
             onError = { viewModel.onError(it) }
         )
     }
@@ -76,18 +98,31 @@ fun CorridorCaptureScreen(
         onDispose { host.release() }
     }
 
-    // Heading updates + automatic capture
+    // Heading + pitch updates, automatic capture, layer advancement
     LaunchedEffect(Unit) {
-        headingProvider.headingDeg.collect { yaw ->
-            currentYaw = yaw
+        headingProvider.headingDeg.collect { yaw -> currentYaw = yaw }
+    }
+    LaunchedEffect(Unit) {
+        headingProvider.pitchDeg.collect { pitch ->
+            currentPitch = pitch
 
-            if (uiState.captureState == CaptureState.CAMERA_ACTIVE && uiState.framesCaptured < 8) {
-                val normalizedYaw = ((yaw % 360f) + 360f) % 360f
+            val totalCaptured = capturedBucketsByLayer.values.sumOf { it.size }
+            if (uiState.captureState == CaptureState.CAMERA_ACTIVE &&
+                totalCaptured < totalFrames &&
+                currentPitch in currentLayer.pitchRangeDeg
+            ) {
+                val normalizedYaw = ((currentYaw % 360f) + 360f) % 360f
                 val bucket = (normalizedYaw / intervalDeg).toInt()
+                val layerBuckets = capturedBucketsByLayer[currentLayer] ?: emptySet()
 
-                if (bucket !in capturedBuckets) {
-                    capturedBuckets = capturedBuckets + bucket
-                    host.onCaptureRequested()
+                if (bucket !in layerBuckets) {
+                    val updatedBuckets = layerBuckets + bucket
+                    capturedBucketsByLayer = capturedBucketsByLayer + (currentLayer to updatedBuckets)
+                    host.onCaptureRequested(currentLayer)
+
+                    if (updatedBuckets.size >= framesPerLayer && currentLayerIndex < CaptureLayer.scanOrder.lastIndex) {
+                        currentLayerIndex += 1
+                    }
                 }
             }
         }
@@ -95,14 +130,15 @@ fun CorridorCaptureScreen(
 
     LaunchedEffect(uiState.captureState) {
         if (uiState.captureState != CaptureState.CAMERA_ACTIVE) {
-            capturedBuckets = emptySet()
+            capturedBucketsByLayer = CaptureLayer.scanOrder.associateWith { emptySet() }
+            currentLayerIndex = 0
         }
     }
 
     LaunchedEffect(viewModel.events) {
         viewModel.events.collect { event ->
             when (event) {
-                is CaptureEvent.NavigateToStitching -> onFinishSegment(event.outputPath)
+                is CaptureEvent.NavigateToStitching -> onFinishSegment(event.outputPathsByLayer)
             }
         }
     }
@@ -124,9 +160,9 @@ fun CorridorCaptureScreen(
         if (uiState.captureState == CaptureState.CAMERA_ACTIVE) {
             HeadingGuideOverlay(
                 currentYawDeg = currentYaw,
-                framesCaptured = uiState.framesCaptured,
+                framesCaptured = capturedBuckets.size,
                 capturedBuckets = capturedBuckets,
-                totalTargets = 8
+                totalTargets = framesPerLayer
             )
         }
 
@@ -140,7 +176,13 @@ fun CorridorCaptureScreen(
             shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
         ) {
             Text(
-                text = guidanceMessage(uiState.captureState, uiState.framesCaptured, 8),
+                text = guidanceMessage(
+                    state = uiState.captureState,
+                    layer = currentLayer,
+                    layerBucketsCaptured = capturedBuckets.size,
+                    inLayerBand = currentPitch in currentLayer.pitchRangeDeg,
+                    framesPerLayer = framesPerLayer
+                ),
                 color = Color.White,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -152,7 +194,7 @@ fun CorridorCaptureScreen(
             SphereCaptureRadar(
                 currentYawDeg = currentYaw,
                 capturedBuckets = capturedBuckets,
-                totalTargets = 8,
+                totalTargets = framesPerLayer,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 56.dp, end = 16.dp)
@@ -197,13 +239,13 @@ fun CorridorCaptureScreen(
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator(
-                progress = { uiState.framesCaptured / 8f },
+                progress = { uiState.framesCaptured / totalFrames.toFloat() },
                 color = Color(0xFF4CAF50),
                 trackColor = Color.White.copy(alpha = 0.25f),
                 modifier = Modifier.fillMaxSize()
             )
             Text(
-                text = "${uiState.framesCaptured}/8",
+                text = "${uiState.framesCaptured}/$totalFrames",
                 color = Color.White,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold

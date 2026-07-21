@@ -18,7 +18,10 @@ data class CaptureUiState(
 )
 
 sealed class CaptureEvent {
-    data class NavigateToStitching(val outputPath: String) : CaptureEvent()
+    // One output path per successfully stitched layer (e.g. "MIDDLE" -> path).
+    // Layers with too few frames or a stitch failure are omitted here and
+    // surfaced instead via errorMessage, naming which ring needs a rescan.
+    data class NavigateToStitching(val outputPathsByLayer: Map<String, String>) : CaptureEvent()
 }
 
 class CorridorCaptureViewModel(
@@ -47,22 +50,24 @@ class CorridorCaptureViewModel(
     }
 
     // Called by CorridorCaptureHost after a real CameraX+ARCore capture completes
-    fun onPoseCaptured(pose: CapturePose, imagePath: String) {
+    fun onPoseCaptured(pose: CapturePose, imagePath: String, layer: CaptureLayer) {
         viewModelScope.launch {
             repository.saveFrame(
                 imagePath = imagePath,
                 x = pose.x,
                 y = pose.y,
                 z = pose.z,
-                yawDegrees = pose.yawDegrees
+                yawDegrees = pose.yawDegrees,
+                layer = layer.name
             )
-            val frames = repository.getFramesForSession(segmentId)
+            val layers = repository.getLayersForSession(segmentId)
+            val allFrames = layers.flatMap { repository.getFramesForSession(segmentId, it) }
             _uiState.update {
                 it.copy(
-                    framesCaptured = frames.size,
-                    framePaths = frames.map { f -> f.imagePath },
+                    framesCaptured = allFrames.size,
+                    framePaths = allFrames.map { f -> f.imagePath },
                     lastDistanceMeters = pose.distanceMeters,
-                    readyToStitch = frames.size >= 2
+                    readyToStitch = allFrames.size >= 2
                 )
             }
         }
@@ -72,25 +77,43 @@ class CorridorCaptureViewModel(
         _uiState.update { it.copy(errorMessage = message, captureState = CaptureState.ERROR) }
     }
 
+    // Stitches each captured layer (tilt ring) independently — PanoramaStitcher
+    // chains adjacent frames assuming one continuous rotational sweep, so
+    // layers must never be mixed into a single stitch() call.
     fun onStitchRequested() {
         viewModelScope.launch {
             _uiState.update { it.copy(captureState = CaptureState.STITCHING) }
-            val frames = repository.getFramesForSession(segmentId)
-            val imagePaths = frames.map { it.imagePath }
 
-            when (val result = panoramaStitcher.stitch(imagePaths)) {
-                is StitchResult.Success -> {
-                    repository.saveStitchedPanorama(segmentId, result.outputPath)
-                    _uiState.update { it.copy(captureState = CaptureState.STITCH_COMPLETE) }
-                    _events.emit(CaptureEvent.NavigateToStitching(result.outputPath))
+            val layers = repository.getLayersForSession(segmentId)
+            val succeeded = mutableMapOf<String, String>()
+            val failedLayers = mutableListOf<String>()
+
+            for (layer in layers) {
+                val imagePaths = repository.getFramesForSession(segmentId, layer).map { it.imagePath }
+                if (imagePaths.size < 2) {
+                    failedLayers += layer
+                    continue
                 }
-                is StitchResult.Failure -> {
-                    _uiState.update {
-                        it.copy(
-                            errorMessage = "Stitch failed: ${result.reason}",
-                            captureState = CaptureState.ERROR
-                        )
+                when (val result = panoramaStitcher.stitch(imagePaths, fileName = "${segmentId}_$layer")) {
+                    is StitchResult.Success -> {
+                        repository.saveStitchedPanorama(segmentId, layer, result.outputPath)
+                        succeeded[layer] = result.outputPath
                     }
+                    is StitchResult.Failure -> failedLayers += layer
+                }
+            }
+
+            if (failedLayers.isEmpty() && succeeded.isNotEmpty()) {
+                _uiState.update { it.copy(captureState = CaptureState.STITCH_COMPLETE) }
+                _events.emit(CaptureEvent.NavigateToStitching(succeeded))
+            } else {
+                _uiState.update {
+                    it.copy(
+                        errorMessage = if (failedLayers.isNotEmpty())
+                            "Stitch failed for: ${failedLayers.joinToString()} — rescan ${if (failedLayers.size > 1) "these layers" else "this layer"}"
+                        else "No frames captured",
+                        captureState = CaptureState.ERROR
+                    )
                 }
             }
         }

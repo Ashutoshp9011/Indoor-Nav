@@ -25,6 +25,12 @@ class SensorHeadingProvider(
     private val _headingDeg = MutableStateFlow(0f)
     val headingDeg: StateFlow<Float> = _headingDeg
 
+    private val _pitchDeg = MutableStateFlow(0f)
+    val pitchDeg: StateFlow<Float> = _pitchDeg
+
+    private val _rollDeg = MutableStateFlow(0f)
+    val rollDeg: StateFlow<Float> = _rollDeg
+
     /** Returns false if there's no rotation-vector sensor on this device — caller should surface an error. */
     fun start(): Boolean {
         val sensor = rotationSensor ?: return false
@@ -50,6 +56,12 @@ class SensorHeadingProvider(
         if (azimuthDeg < 0) azimuthDeg += 360f
 
         _headingDeg.value = azimuthDeg
+
+        // orientationAngles[1] = pitch in radians, roughly -90..90 for phone held upright
+        _pitchDeg.value = Math.toDegrees(orientationAngles[1].toDouble()).toFloat()
+
+        // orientationAngles[2] = roll in radians, -180..180
+        _rollDeg.value = Math.toDegrees(orientationAngles[2].toDouble()).toFloat()
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {

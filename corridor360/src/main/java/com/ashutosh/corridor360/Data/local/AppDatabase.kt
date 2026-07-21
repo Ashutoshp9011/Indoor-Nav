@@ -14,7 +14,7 @@ import com.ashutosh.corridor360.entity.PanoramaEntity
 
 @Database(
     entities = [NodeEntity::class, EdgeEntity::class, FrameEntity::class, PanoramaEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

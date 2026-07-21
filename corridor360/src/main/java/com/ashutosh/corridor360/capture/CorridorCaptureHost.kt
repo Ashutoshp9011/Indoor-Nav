@@ -27,7 +27,7 @@ class CorridorCaptureHost(
     lifecycleOwner: LifecycleOwner,
     private val nodeId: String,
     private val onStateChanged: (CaptureState) -> Unit,
-    private val onPoseCaptured: (CapturePose, imagePath: String) -> Unit,
+    private val onPoseCaptured: (CapturePose, imagePath: String, layer: CaptureLayer) -> Unit,
     private val onError: (String) -> Unit
 ) {
     private val cameraRecorder = CameraXRecorder(context, lifecycleOwner)
@@ -53,15 +53,26 @@ class CorridorCaptureHost(
      * so this keeps that contract intact rather than making pose nullable
      * everywhere, which would need undoing again in Phase 2.
      */
-    fun onCaptureRequested() {
+    private var captureInFlight = false
+
+    fun onCaptureRequested(layer: CaptureLayer) {
+        if (captureInFlight) return
+        captureInFlight = true
+        onStateChanged(CaptureState.CAPTURING)
+
         cameraRecorder.captureFrame(
             nodeId = nodeId,
             onSaved = { imagePath ->
+                captureInFlight = false
                 val placeholderPose = CapturePose(x = 0f, y = 0f, z = 0f, yawDegrees = 0f, distanceMeters = null)
-                onPoseCaptured(placeholderPose, imagePath)
+                onPoseCaptured(placeholderPose, imagePath, layer)
                 onStateChanged(CaptureState.CAMERA_ACTIVE)
             },
-            onError = { e -> onError("Capture failed: ${e.message}") }
+            onError = { e ->
+                captureInFlight = false
+                onError("Capture failed: ${e.message}")
+                onStateChanged(CaptureState.CAMERA_ACTIVE)
+            }
         )
 
         /*
